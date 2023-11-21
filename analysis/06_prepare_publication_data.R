@@ -22,13 +22,36 @@ degs_all = data.table::fread(paste0(project_path,"deg_nebula_all.txt"),data.tabl
 degs_all = degs_all %>% dplyr::arrange(cluster,pval_adj,pval)
 degs_all$cluster = as.character(degs_all$cluster)
 
+outputdata_path = "/beegfs/scratch/bruening_scratch/lsteuernagel/data/2023-03-almu-snseq-analysis/AgrpPomc/"
+AgrpPomcNTS_raw = readRDS(paste0(outputdata_path,"almu_2023_04_AgrpPomc_raw.rds"))
 
 ##########
 ### Export supplementary data for GEO
 ##########
 
 ## saving large files for GEO upload outside git repo!
+geo_output_path = "/beegfs/scratch/bruening_scratch/lsteuernagel/data/2023-03-almu-snseq-analysis/geo_upload/"
 
+## counts of raw object as mtx
+counts_mat= AgrpPomcNTS_raw@assays$RNA@counts
+Matrix::writeMM(obj = counts_mat,file = paste0(geo_output_path,"aggregated_matrix.mtx"))
+
+## features.csv
+feature_df = data.frame(feature = rownames(AgrpPomcNTS_raw))
+data.table::fwrite(feature_df,file = paste0(geo_output_path,"aggregated_features.tsv"),sep="\t")
+
+## barcodes.csv
+barcodes_df = data.frame(barcode = colnames(AgrpPomcNTS_raw))
+data.table::fwrite(barcodes_df,file = paste0(geo_output_path,"aggregated_barcodes.tsv"),sep="\t")
+
+## metadata.csv , using base version from raw object and joining relevant columns from final object
+metadata_agg = AgrpPomcNTS_raw@meta.data %>% dplyr::select(Cell_ID,Sample_ID,Condition,nCount_RNA,nFeature_RNA,percent.mt)
+metadata_agg$passQC = "no"
+meta_to_add = AgrpPomcNTS_withIEG@meta.data %>% dplyr::select(Cell_ID,preliminary_clusters,celltype_annotation,cluster_annotation,ieg_score,ieg_category)
+metadata_agg = dplyr::left_join(metadata_agg,meta_to_add,by="Cell_ID")
+metadata_agg$passQC[!is.na(metadata_agg$preliminary_clusters)] = "yes"
+
+data.table::fwrite(as.data.frame(metadata_agg),file = paste0(geo_output_path,"meta_data.tsv"),sep="\t")
 
 ##########
 ### Export source data as xlsx
